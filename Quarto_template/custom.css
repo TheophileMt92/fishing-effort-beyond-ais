@@ -19,6 +19,12 @@
   --rule:          rgba(26, 127, 168, 0.2);
   --header-height: 200px;
   --footer-height: 110px;
+  /* Width of the document column. Raise or lower this one value to
+     make the whole report wider or narrower. */
+  --content-width: 100%;
+  /* Tables and figures can run wider than the prose if you want.
+     Set to var(--content-width) to keep everything aligned. */
+  --wide-width:    1150px;
 }
 
 /* ── Base typography ────────────────────────────────────────── */
@@ -55,37 +61,29 @@ code, pre {
   font-size: 0.88em;
 }
 
-/* ── Main content area ──────────────────────────────────────── */
-#quarto-content,
-.content,
-main {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 2.5rem 4rem 3rem;
+/* ── Main content area ──────────────────────────────────────────
+   With `theme: none`, Quarto emits no wrapper element: headings,
+   paragraphs and cells are direct children of <body>. So the content
+   column is set here, excluding the full-bleed header and footer.
+   If you ever render with a Bootstrap theme, replace this rule with
+   a max-width on #quarto-content instead.                          */
+body > *:not(.ocean-header):not(.ocean-footer) {
+  max-width: var(--content-width);
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 2.5rem;
+  padding-right: 2.5rem;
   box-sizing: border-box;
 }
 
-/* Quarto wraps content in several nested divs — constrain them all */
-#quarto-document-content,
-.page-columns,
-.page-full,
-#quarto-margin-sidebar,
-.quarto-title-block {
-  max-width: 800px !important;
-  margin-left: auto !important;
-  margin-right: auto !important;
-  padding-left: 4rem;
-  padding-right: 4rem;
-  box-sizing: border-box;
+/* Cells holding tables or figures may use --wide-width instead */
+body > div.cell {
+  max-width: var(--wide-width);
 }
 
-/* The column-body is the main text column inside page-columns */
-.column-body,
-.column-page,
-.column-screen-inset {
-  max-width: 100% !important;
-  width: 100% !important;
-}
+/* Breathing room under the header and above the footer */
+body > header#title-block-header { padding-top: 2.5rem; }
+body > *:last-of-type:not(.ocean-footer) { margin-bottom: 2.5rem; }
 
 body {
   overflow-x: hidden;
@@ -308,17 +306,45 @@ figcaption, .figure-caption {
 }
 
 /* ── Quarto-specific overrides ──────────────────────────────── */
-#quarto-document-content { padding-top: 0; }
 
 /* Title block */
-.quarto-title-meta { color: var(--text-secondary); font-size: 0.9em; }
-.quarto-title h1.title { margin-top: 2rem; }
+#title-block-header h1.title {
+  margin-top: 0;
+  margin-bottom: .3rem;
+}
+#title-block-header .subtitle {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.15rem;
+  color: var(--text-secondary);
+  margin-bottom: .8rem;
+}
+#title-block-header .author,
+#title-block-header .date {
+  color: var(--text-secondary);
+  font-size: 0.92em;
+  margin: 0;
+}
 
-/* TOC sidebar */
-#toc-sidebar { border-left: 2px solid var(--rule); }
-#toc-sidebar a { color: var(--text-secondary); font-size: 0.88em; }
-#toc-sidebar a:hover { color: var(--accent); }
-#toc-sidebar a.active { color: var(--ocean-deep); font-weight: 600; }
+/* Table of contents: inline above the document, not a sidebar */
+nav#TOC {
+  border-left: 3px solid var(--rule);
+  background: #f7fbfd;
+  padding-top: .9rem;
+  padding-bottom: .9rem;
+  margin-bottom: 2.5rem;
+}
+nav#TOC h2 {
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: .8rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin: 0 0 .5rem;
+}
+nav#TOC ul { margin: 0; padding-left: 1.1rem; }
+nav#TOC li { margin: .15rem 0; }
+nav#TOC a { color: var(--text-secondary); font-size: 0.92em; }
+nav#TOC a:hover { color: var(--accent); }
 
 /* ── Print ──────────────────────────────────────────────────── */
 @media print {
@@ -329,9 +355,15 @@ figcaption, .figure-caption {
 
 /* ── Responsive ─────────────────────────────────────────────── */
 @media (max-width: 700px) {
+  body > *:not(.ocean-header):not(.ocean-footer) {
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+  }
   .ocean-footer-content { flex-direction: column; text-align: center; gap: .75rem; }
   .footer-right { text-align: center; }
   :root { --header-height: 140px; }
+  table { font-size: 0.8em; }
+  thead th, tbody td { padding: .4rem .5rem; }
 }
 
 details.code-fold {
@@ -358,8 +390,6 @@ details.code-fold > summary::before {
 }
 details.code-fold[open] > summary::before { transform: rotate(90deg); }
 details.code-fold > summary:hover { color: var(--ocean-surface); }
-details.code-fold[open] > summary::before { transform: rotate(90deg); }
-details.code-fold > summary:hover { color: var(--ocean-surface); }
 
 details.code-fold pre {
   margin: 0;
@@ -367,14 +397,20 @@ details.code-fold pre {
   border-radius: 0;
   background: transparent;
 }
+/* ── Embedded widgets ───────────────────────────────────────────
+   Width is inherited from the content column above; these only set
+   what the column cannot.                                          */
 .leaflet-container {
-  max-width: 800px;
   height: 480px !important;
-  margin: 1.5rem auto;
+  margin: 1.5rem 0;
   border-radius: 4px;
 }
+
 .plotly.html-widget,
-.reactable {
-  max-width: 800px !important;
-  margin: 1.5rem auto;
+.reactable,
+img,
+figure img {
+  max-width: 100%;
+  height: auto;
 }
+
