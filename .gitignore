@@ -1,0 +1,27 @@
+# Data and model objects: too large for git, and subject to source licence terms.
+# Download from Global Fishing Watch and place under R/Data/.
+R/Data/
+*.Rdata
+*.RData
+*.rds
+*.tif
+*.csv
+
+# Keep the figure tracked so the README image renders
+!R/Outputs/fishing_effort_panels.png
+
+# Quarto
+/.quarto/
+*_files/
+*_cache/
+*.rmarkdown
+fishing_figure.html
+
+# R and RStudio
+.Rproj.user/
+.Rhistory
+.Ruserdata
+*.Rproj
+
+# macOS
+.DS_Store

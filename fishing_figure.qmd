@@ -1,0 +1,272 @@
+---
+title: "Mapping fishing effort beyond AIS"
+subtitle: "Combining vessel broadcasts with Sentinel-1 satellite radar"
+author: "Théophile L. Mouton"
+date: today
+format:
+  html:
+    embed-resources: true
+    css: Quarto_template/custom.css
+    include-before-body: Quarto_template/header.html
+    include-after-body: Quarto_template/footer.html
+    theme: none
+    toc: true
+    toc-depth: 2
+    code-fold: true
+    code-summary: "Show code"
+    fig-align: center
+execute:
+  echo: true
+  message: false
+  warning: false
+---
+
+```{r libs}
+#| echo: false
+#| output: false
+library(dplyr)
+library(ggplot2)
+library(maps)
+library(scales)
+library(patchwork)
+library(knitr)
+```
+
+## The problem
+
+Public monitoring of industrial fishing leans heavily on AIS, the transponder
+system vessels use to broadcast their position. Coverage is uneven: not every
+vessel carries it, not every vessel keeps it switched on, and satellite reception
+varies by region. Sentinel-1 radar sees vessels regardless of what they broadcast,
+but a radar detection tells you only that something was there at that moment, not
+how long it fished.
+
+This document builds one figure from three layers: what vessels report, what
+satellites see, and a model that estimates fishing hours in the cells where radar
+finds vessels and AIS is silent.
+
+Both sources come from Global Fishing Watch, aggregated to a 0.1 degree global
+grid over 2017 to 2020.
+
+## Loading the data
+
+Panels A and B come straight from the pre-aggregated grid, so the raw AIS and SAR
+records are never opened.
+
+```{r load}
+#| output: false
+load(here::here("R", "Data", "combined_data_O1deg.Rdata"))
+
+ais_col <- "total_fishing_hours"
+sar_col <- "total_presence_score"
+
+d <- as.data.frame(combined_data_01deg)
+
+panel_a <- d %>%
+  filter(has_AIS, .data[[ais_col]] > 0) %>%
+  transmute(lon_std, lat_std, value = .data[[ais_col]])
+
+panel_b <- d %>%
+  filter(has_SAR, .data[[sar_col]] > 0) %>%
+  transmute(lon_std, lat_std, value = .data[[sar_col]])
+```
+
+## Predicting fishing hours from radar
+
+The model is a random forest trained on cells where both signals exist, predicting
+log fishing hours from SAR detections per satellite overpass, coordinates,
+distance to shore, distance to port and bathymetry.
+
+Detections are normalised by overpass frequency, and that choice matters more than
+it might appear. Cells overflown more often accumulate more detections regardless
+of how much fishing happens there, so a model trained on raw counts partly learns
+the satellite's orbit rather than the fishery. Removing that artefact costs some
+apparent accuracy and buys a model that measures the right thing.
+
+```{r prepare}
+#| output: false
+cache <- here::here("R", "Data", "figure_cache.Rdata")
+
+if (file.exists(cache)) {
+  load(cache)
+} else {
+  library(data.table)
+  library(raster)
+  library(randomForest)
+
+  load(here::here("R", "Data", "SAR_overpasses_per_cell.Rdata"))
+
+  raster_df <- as.data.frame(
+    stack(raster(here::here("R", "Data", "distance-from-shore-0.1deg-adjusted.tif")),
+          raster(here::here("R", "Data", "distance-from-port-0.1deg-adjusted.tif")),
+          raster(here::here("R", "Data", "bathymetry-0.1deg-adjusted.tif"))),
+    xy = TRUE)
+  names(raster_df) <- c("x", "y", "dist_shore", "dist_ports", "bathy")
+  raster_df <- na.omit(raster_df)
+  setDT(raster_df)
+  raster_df[, `:=`(lon_std = round(x, 1), lat_std = round(y, 1))]
+  raster_df <- raster_df[bathy < 0]
+  raster_df <- unique(raster_df, by = c("lon_std", "lat_std"))
+
+  dt <- merge(
+    as.data.table(d),
+    as.data.table(overpasses_per_cell)[, .(lon_std, lat_std, detections_per_overpass)],
+    by = c("lon_std", "lat_std"), all.x = TRUE
+  )
+  dt <- unique(dt, by = c("lon_std", "lat_std"))
+
+  with_rasters <- as.data.frame(
+    raster_df[dt, on = .(lon_std, lat_std), nomatch = 0]
+  )
+
+  # Cells seen by radar but not broadcasting: the prediction targets
+  sar_only <- with_rasters %>%
+    filter(has_SAR, !has_AIS) %>%
+    dplyr::select(detections_per_overpass, lon_std, lat_std,
+                  dist_shore, dist_ports, bathy) %>%
+    na.omit()
+
+  rf <- readRDS(here::here("R", "Data", "rf_norm_fishing_log.rds"))
+  sar_only$value <- 10^predict(rf, newdata = sar_only) - 1
+  panel_c <- sar_only %>% dplyr::select(lon_std, lat_std, value)
+
+  # Cells with both signals: the validation set
+  validation <- with_rasters %>%
+    filter(has_AIS, has_SAR) %>%
+    mutate(log_total_fishing_hours = log10(total_fishing_hours + 1),
+           log_detections_per_overpass = log10(detections_per_overpass + 1))
+
+  evaluate_model <- function(model, data, log_target = FALSE) {
+    p <- predict(model, newdata = data)
+    if (log_target) p <- 10^p - 1
+    actual <- if (log_target) 10^data$log_total_fishing_hours - 1 else data$total_fishing_hours
+    res <- actual - p
+    n <- length(actual)
+    k <- length(attr(model$terms, "term.labels"))
+    r2 <- model$rsq[length(model$rsq)]
+    c(mae    = mean(abs(res), na.rm = TRUE),
+      rmse   = sqrt(mean(res^2, na.rm = TRUE)),
+      mape   = mean(abs(res / actual) * 100, na.rm = TRUE),
+      medae  = median(abs(res), na.rm = TRUE),
+      r2     = r2,
+      adj_r2 = 1 - ((1 - r2) * (n - 1) / (n - k - 1)),
+      m_res  = mean(res, na.rm = TRUE),
+      sd_res = sd(res, na.rm = TRUE))
+  }
+
+  m_none      <- readRDS(here::here("R", "Data", "rf_norm_no_transform.rds"))
+  m_fish_log  <- rf
+  m_pred_log  <- readRDS(here::here("R", "Data", "rf_norm_predictor_log.rds"))
+  m_both_log  <- readRDS(here::here("R", "Data", "rf_norm_both_log.rds"))
+
+  results_comparison <- data.frame(
+    Metric = c("Mean absolute error", "Root mean squared error",
+               "Mean absolute percentage error", "Median absolute error",
+               "R-squared", "Adjusted R-squared",
+               "Mean of residuals", "SD of residuals"),
+    `No transform`      = round(evaluate_model(m_none, validation), 2),
+    `Fishing hours log` = round(evaluate_model(m_fish_log, validation, TRUE), 2),
+    `Predictor log`     = round(evaluate_model(m_pred_log, validation), 2),
+    `Both log`          = round(evaluate_model(m_both_log, validation, TRUE), 2),
+    check.names = FALSE, row.names = NULL
+  )
+
+  save(panel_c, results_comparison, file = cache)
+}
+```
+
+### Comparing transformations
+
+Four variants were compared, differing only in whether the response, the predictor
+or both were log transformed.
+
+```{r table}
+kable(results_comparison, format = "html", digits = 2,
+      caption = "Model performance on cells where AIS and SAR both report")
+```
+
+Log transforming the response is what matters. The two variants that do so reach
+an R-squared of 0.77 and cut the mean absolute percentage error from well over a
+thousand percent to roughly eighty-six, while the median absolute error falls from
+around thirty-three hours to about twelve. Log transforming the predictor alone
+changes almost nothing.
+
+The fishing hours log model is the one used here. It edges out the both-log
+variant on error metrics and is easier to interpret, since detections per overpass
+stay on their original scale.
+
+## The figure
+
+```{r panels}
+#| output: false
+world <- map_data("world")
+
+make_panel <- function(dat, legend_title, breaks) {
+  ggplot() +
+    geom_map(data = world, map = world,
+             aes(long, lat, map_id = region),
+             color = NA, fill = "grey86", linewidth = 0) +
+    geom_tile(data = dat, aes(lon_std, lat_std, fill = value)) +
+    scale_fill_viridis_c(
+      option = "inferno", direction = -1, trans = "log1p",
+      name = legend_title, breaks = breaks, labels = comma,
+      guide = guide_colorbar(barwidth = 14, barheight = 0.4,
+                             title.position = "top", title.hjust = 0.5)
+    ) +
+    coord_fixed(1.15, xlim = c(-180, 180), ylim = c(-70, 82), expand = FALSE) +
+    theme_void(base_size = 13) +
+    theme(
+      legend.position = "bottom",
+      legend.title = element_text(size = 11, margin = ggplot2::margin(b = 4)),
+      legend.text = element_text(size = 9),
+      plot.title = element_text(face = "bold", size = 14,
+                                margin = ggplot2::margin(b = 2)),
+      plot.subtitle = element_text(size = 11, colour = "grey30",
+                                   margin = ggplot2::margin(b = 4)),
+      plot.margin = ggplot2::margin(4, 8, 4, 8)
+    )
+}
+
+hour_breaks <- c(0, 10, 1000, 100000)
+
+pa <- make_panel(panel_a, "Fishing hours, 2017 to 2020", hour_breaks) +
+  labs(title = "What vessels report",
+       subtitle = "AIS broadcast fishing effort")
+
+pb <- make_panel(panel_b, "Summed detection score, 2017 to 2020",
+                 c(0, 10, 100, 1000)) +
+  labs(title = "What satellites see",
+       subtitle = "Sentinel-1 radar detections of fishing vessels")
+
+pc <- make_panel(bind_rows(panel_a, panel_c),
+                 "Fishing hours, 2017 to 2020", hour_breaks) +
+  labs(title = "The complete picture",
+       subtitle = "Reported hours plus model estimates for radar-detected cells")
+
+fig <- pa / pb / pc
+```
+
+Panels A and C share a colour scale, so any difference between them is a
+difference in effort rather than an artefact of rescaling.
+
+```{r figure}
+#| fig-width: 8
+#| fig-height: 13
+#| out-width: "62%"
+#| echo: false
+fig
+```
+
+```{r save}
+#| echo: false
+#| output: false
+dir.create(here::here("R", "Outputs"), showWarnings = FALSE, recursive = TRUE)
+ggsave(here::here("R", "Outputs", "fishing_effort_panels.png"),
+       plot = fig, width = 8, height = 13, dpi = 150, bg = "white")
+```
+
+::: {.callout-note}
+Data from Global Fishing Watch: AIS fishing effort (Kroodsma et al. 2018,
+*Science*) and Sentinel-1 vessel detections (Paolo et al. 2024, *Nature*).
+Figure supports a manuscript in preparation.
+:::

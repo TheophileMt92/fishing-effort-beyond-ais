@@ -1,0 +1,380 @@
+/* =============================================================
+   Théophile Mouton — Quarto Ocean Theme
+   Usage: add `css: custom.css` to your YAML front matter
+   ============================================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=Source+Sans+3:wght@300;400;600&family=Source+Code+Pro:wght@400&display=swap');
+
+/* ── Colour tokens ──────────────────────────────────────────── */
+:root {
+  --ocean-deep:    #062d4a;
+  --ocean-mid:     #0d4f7a;
+  --ocean-surface: #1a7fa8;
+  --ocean-light:   #4eb8d4;
+  --ocean-foam:    #c8eaf4;
+  --sand:          #f5f0e8;
+  --text-primary:  #1a2332;
+  --text-secondary:#445566;
+  --accent:        #1a7fa8;
+  --rule:          rgba(26, 127, 168, 0.2);
+  --header-height: 200px;
+  --footer-height: 110px;
+}
+
+/* ── Base typography ────────────────────────────────────────── */
+body {
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 17px;
+  line-height: 1.75;
+  color: var(--text-primary);
+  background: #ffffff;
+  margin: 0;
+  padding: 0;
+}
+
+h1, h2, h3, h4 {
+  font-family: 'Playfair Display', Georgia, serif;
+  color: var(--ocean-deep);
+  font-weight: 600;
+  margin-top: 2rem;
+  line-height: 1.25;
+}
+
+h1 { font-size: 2.2rem; border-bottom: 2px solid var(--rule); padding-bottom: .5rem; }
+h2 { font-size: 1.65rem; }
+h3 { font-size: 1.3rem; }
+h4 { font-size: 1.1rem; color: var(--text-secondary); }
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+p { margin: 0 0 1.1rem; }
+
+code, pre {
+  font-family: 'Source Code Pro', monospace;
+  font-size: 0.88em;
+}
+
+/* ── Main content area ──────────────────────────────────────── */
+#quarto-content,
+.content,
+main {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2.5rem 4rem 3rem;
+  box-sizing: border-box;
+}
+
+/* Quarto wraps content in several nested divs — constrain them all */
+#quarto-document-content,
+.page-columns,
+.page-full,
+#quarto-margin-sidebar,
+.quarto-title-block {
+  max-width: 800px !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  padding-left: 4rem;
+  padding-right: 4rem;
+  box-sizing: border-box;
+}
+
+/* The column-body is the main text column inside page-columns */
+.column-body,
+.column-page,
+.column-screen-inset {
+  max-width: 100% !important;
+  width: 100% !important;
+}
+
+body {
+  overflow-x: hidden;
+}
+
+/* ── Ocean header ───────────────────────────────────────────── */
+.ocean-header {
+  width: 100%;
+  height: var(--header-height);
+  background:
+    /* optional: swap the gradient for url('your-ocean-photo.jpg') center/cover no-repeat */
+    linear-gradient(
+      160deg,
+      var(--ocean-deep)  0%,
+      var(--ocean-mid)   40%,
+      var(--ocean-surface) 75%,
+      var(--ocean-light) 100%
+    );
+  position: relative;
+  overflow: hidden;
+}
+
+/* If you have an actual photo, add it as a class on the div:
+   .ocean-header.use-photo { background-image: url('ocean.jpg'); background-size: cover; background-position: center; }
+   .ocean-header.use-photo .ocean-header-overlay { background: rgba(6,45,74,0.55); } */
+
+.ocean-header-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+}
+
+.ocean-header-overlay .wave-top {
+  width: 100%;
+  height: 80px;
+  position: absolute;
+  bottom: 0;
+}
+
+/* light shimmer effect */
+.ocean-header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(255,255,255,0.00) 0px,
+    rgba(255,255,255,0.03) 2px,
+    rgba(255,255,255,0.00) 4px
+  );
+  animation: shimmer 8s linear infinite;
+}
+
+@keyframes shimmer {
+  0%   { transform: translateX(-4px); }
+  100% { transform: translateX(4px); }
+}
+
+/* ── Ocean footer ───────────────────────────────────────────── */
+.ocean-footer {
+  width: 100%;
+  background: linear-gradient(
+    160deg,
+    var(--ocean-deep) 0%,
+    var(--ocean-mid)  60%,
+    var(--ocean-surface) 100%
+  );
+  color: rgba(255,255,255,0.9);
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 13px;
+  position: relative;
+  margin-top: 3rem;
+}
+
+.ocean-footer-waves {
+  width: 100%;
+  height: 60px;
+  overflow: hidden;
+  line-height: 0;
+}
+
+.ocean-footer-waves svg {
+  width: 100%;
+  height: 60px;
+}
+
+.ocean-footer-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: .9rem 2.5rem 1.2rem;
+  flex-wrap: wrap;
+}
+
+.footer-left {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  flex: 0 0 auto;
+}
+
+.footer-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: #ffffff;
+  letter-spacing: 0.01em;
+}
+
+.footer-sep {
+  color: rgba(255,255,255,0.4);
+}
+
+.footer-role {
+  color: rgba(255,255,255,0.7);
+  font-weight: 300;
+}
+
+.footer-center {
+  text-align: center;
+  flex: 1 1 auto;
+  color: rgba(255,255,255,0.75);
+  line-height: 1.5;
+}
+
+.footer-institution {
+  font-weight: 600;
+  color: rgba(255,255,255,0.9);
+  font-size: 12.5px;
+}
+
+.footer-program {
+  font-size: 11.5px;
+  color: rgba(255,255,255,0.55);
+}
+
+.footer-right {
+  text-align: right;
+  flex: 0 0 auto;
+  line-height: 1.6;
+}
+
+.footer-link {
+  color: var(--ocean-foam);
+  text-decoration: none;
+  font-size: 12.5px;
+  font-weight: 400;
+}
+
+.footer-link:hover {
+  text-decoration: underline;
+  color: #ffffff;
+}
+
+.footer-datasphere {
+  color: rgba(255,255,255,0.5);
+  font-size: 11.5px;
+  font-style: italic;
+}
+
+/* ── Table styling ──────────────────────────────────────────── */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1.5rem 0;
+  font-size: 0.9em;
+}
+
+thead {
+  background: var(--ocean-deep);
+  color: #ffffff;
+}
+
+thead th {
+  padding: .6rem 1rem;
+  text-align: left;
+  font-family: 'Source Sans 3', sans-serif;
+  font-weight: 600;
+  font-size: 0.85em;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+tbody tr:nth-child(even) { background: #f0f7fb; }
+tbody tr:hover           { background: var(--ocean-foam); transition: background 0.15s; }
+
+tbody td {
+  padding: .5rem 1rem;
+  border-bottom: 1px solid var(--rule);
+  color: var(--text-primary);
+}
+
+/* ── Code blocks ────────────────────────────────────────────── */
+pre {
+  background: #f0f5f8;
+  border-left: 3px solid var(--ocean-surface);
+  border-radius: 0 4px 4px 0;
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+  line-height: 1.5;
+}
+
+/* ── Callout / blockquote ───────────────────────────────────── */
+blockquote {
+  border-left: 3px solid var(--ocean-light);
+  margin: 1.5rem 0;
+  padding: .5rem 1.25rem;
+  color: var(--text-secondary);
+  font-style: italic;
+  background: #f7fbfd;
+}
+
+/* ── Figure captions ────────────────────────────────────────── */
+figcaption, .figure-caption {
+  font-size: 0.85em;
+  color: var(--text-secondary);
+  text-align: center;
+  margin-top: .4rem;
+}
+
+/* ── Quarto-specific overrides ──────────────────────────────── */
+#quarto-document-content { padding-top: 0; }
+
+/* Title block */
+.quarto-title-meta { color: var(--text-secondary); font-size: 0.9em; }
+.quarto-title h1.title { margin-top: 2rem; }
+
+/* TOC sidebar */
+#toc-sidebar { border-left: 2px solid var(--rule); }
+#toc-sidebar a { color: var(--text-secondary); font-size: 0.88em; }
+#toc-sidebar a:hover { color: var(--accent); }
+#toc-sidebar a.active { color: var(--ocean-deep); font-weight: 600; }
+
+/* ── Print ──────────────────────────────────────────────────── */
+@media print {
+  .ocean-header, .ocean-footer { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-size: 11pt; }
+  h1 { font-size: 1.8rem; }
+}
+
+/* ── Responsive ─────────────────────────────────────────────── */
+@media (max-width: 700px) {
+  .ocean-footer-content { flex-direction: column; text-align: center; gap: .75rem; }
+  .footer-right { text-align: center; }
+  :root { --header-height: 140px; }
+}
+
+details.code-fold {
+  margin: 0 0 1.3rem;
+  border-left: 3px solid var(--ocean-light);
+  background: #f7fbfd;
+  border-radius: 0 4px 4px 0;
+}
+details.code-fold > summary {
+  cursor: pointer;
+  padding: .45rem .85rem;
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--ocean-mid);
+  list-style: none;
+  user-select: none;
+}
+details.code-fold > summary::-webkit-details-marker { display: none; }
+details.code-fold > summary::before {
+  content: "▸";
+  display: inline-block;
+  margin-right: .5rem;
+  transition: transform .15s ease;
+}
+details.code-fold[open] > summary::before { transform: rotate(90deg); }
+details.code-fold > summary:hover { color: var(--ocean-surface); }
+details.code-fold[open] > summary::before { transform: rotate(90deg); }
+details.code-fold > summary:hover { color: var(--ocean-surface); }
+
+details.code-fold pre {
+  margin: 0;
+  border-left: none;
+  border-radius: 0;
+  background: transparent;
+}
+.leaflet-container {
+  max-width: 800px;
+  height: 480px !important;
+  margin: 1.5rem auto;
+  border-radius: 4px;
+}
+.plotly.html-widget,
+.reactable {
+  max-width: 800px !important;
+  margin: 1.5rem auto;
+}
