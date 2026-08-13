@@ -15,7 +15,6 @@ R/Data/
 *_files/
 *_cache/
 *.rmarkdown
-fishing_figure.html
 
 # R and RStudio
 .Rproj.user/

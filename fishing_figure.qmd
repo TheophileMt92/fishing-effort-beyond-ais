@@ -5,6 +5,7 @@ author: "Théophile L. Mouton"
 date: today
 format:
   html:
+    output-file: index.html
     embed-resources: true
     css: Quarto_template/custom.css
     include-before-body: Quarto_template/header.html
