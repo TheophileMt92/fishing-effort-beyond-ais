@@ -1,5 +1,5 @@
 ---
-title: "Mapping fishing effort beyond AIS"
+title: "Mapping industrial fishing effort beyond AIS"
 subtitle: "Combining vessel broadcasts with Sentinel-1 satellite radar"
 author: "Théophile L. Mouton"
 date: today
@@ -39,20 +39,20 @@ Public monitoring of industrial fishing leans heavily on AIS, the transponder
 system vessels use to broadcast their position. Coverage is uneven: not every
 vessel carries it, not every vessel keeps it switched on, and satellite reception
 varies by region. Sentinel-1 radar sees vessels regardless of what they broadcast,
-but a radar detection tells you only that something was there at that moment, not
-how long it fished.
+and deep learning classifies each detection as fishing or non-fishing, but a
+detection is a snapshot. It records presence at one moment, not time spent
+fishing.
 
-This document builds one figure from three layers: what vessels report, what
-satellites see, and a model that estimates fishing hours in the cells where radar
-finds vessels and AIS is silent.
+The goal here is to convert presence into effort: to estimate fishing hours in
+the cells where radar finds vessels and AIS is silent, and so extend a global
+effort layer beyond what broadcast data alone can cover.
 
 Both sources come from Global Fishing Watch, aggregated to a 0.1 degree global
 grid over 2017 to 2020.
 
 ## Loading the data
 
-Panels A and B come straight from the pre-aggregated grid, so the raw AIS and SAR
-records are never opened.
+The grid is pre-aggregated, so the raw AIS and SAR records are never opened.
 
 ```{r load}
 #| output: false
@@ -72,17 +72,49 @@ panel_b <- d %>%
   transmute(lon_std, lat_std, value = .data[[sar_col]])
 ```
 
+### How the two signals overlap
+
+```{r coverage}
+data.frame(
+  Category = c("AIS only",
+               "SAR only",
+               "Both signals",
+               "Total cells with any signal"),
+  Cells = c(
+    sum(d$has_AIS & !d$has_SAR),
+    sum(!d$has_AIS & d$has_SAR),
+    sum(d$has_AIS & d$has_SAR),
+    sum(d$has_AIS | d$has_SAR)
+  )
+) %>%
+  kable(format = "html", format.args = list(big.mark = " "),
+        caption = "Grid cells at 0.1 degree resolution, 2017 to 2020")
+```
+
+Cells carrying both signals are what the model learns from. Cells with radar
+detections and no AIS are what it is applied to.
+
+One caveat worth stating plainly: Sentinel-1 imagery used by Paolo et al. covers
+roughly 15 percent of the ocean, concentrated in coastal waters where most
+industrial activity occurs. Empty ocean in the SAR panel below means no imagery,
+not an absence of fishing.
+
 ## Predicting fishing hours from radar
 
-The model is a random forest trained on cells where both signals exist, predicting
-log fishing hours from SAR detections per satellite overpass, coordinates,
-distance to shore, distance to port and bathymetry.
+The model is a random forest trained on cells where both signals exist,
+predicting log fishing hours from SAR detections per satellite overpass,
+coordinates, distance to shore, distance to port and bathymetry.
 
-Detections are normalised by overpass frequency, and that choice matters more than
-it might appear. Cells overflown more often accumulate more detections regardless
-of how much fishing happens there, so a model trained on raw counts partly learns
-the satellite's orbit rather than the fishery. Removing that artefact costs some
-apparent accuracy and buys a model that measures the right thing.
+Detections are normalised by overpass frequency, and that choice matters more
+than it might appear. Cells overflown more often accumulate more detections
+regardless of how much fishing happens there, so a model trained on raw counts
+partly learns the satellite's orbit rather than the fishery. Paolo et al. report
+activity the same way, as detections per overpass, for the same reason.
+
+An earlier version of this model used raw counts and reached an R-squared of
+0.82. Removing the confound costs some apparent accuracy and buys a model that
+measures the right thing. The comparison below covers only the normalised
+variants.
 
 ```{r prepare}
 #| output: false
@@ -137,6 +169,8 @@ if (file.exists(cache)) {
     mutate(log_total_fishing_hours = log10(total_fishing_hours + 1),
            log_detections_per_overpass = log10(detections_per_overpass + 1))
 
+  n_train <- nrow(validation)
+
   evaluate_model <- function(model, data, log_target = FALSE) {
     p <- predict(model, newdata = data)
     if (log_target) p <- 10^p - 1
@@ -172,14 +206,17 @@ if (file.exists(cache)) {
     check.names = FALSE, row.names = NULL
   )
 
-  save(panel_c, results_comparison, file = cache)
+  save(panel_c, results_comparison, n_train, file = cache)
 }
+
+# Older caches predate n_train; fall back to the pre-join count
+if (!exists("n_train")) n_train <- sum(d$has_AIS & d$has_SAR)
 ```
 
 ### Comparing transformations
 
-Four variants were compared, differing only in whether the response, the predictor
-or both were log transformed.
+Four variants were compared, differing only in whether the response, the
+predictor or both were log transformed.
 
 ```{r table}
 kable(results_comparison, format = "html", digits = 2,
@@ -188,13 +225,34 @@ kable(results_comparison, format = "html", digits = 2,
 
 Log transforming the response is what matters. The two variants that do so reach
 an R-squared of 0.77 and cut the mean absolute percentage error from well over a
-thousand percent to roughly eighty-six, while the median absolute error falls from
-around thirty-three hours to about twelve. Log transforming the predictor alone
-changes almost nothing.
+thousand percent to roughly eighty-six, while the median absolute error falls
+from around thirty-three hours to about twelve. Log transforming the predictor
+alone changes almost nothing.
 
 The fishing hours log model is the one used here. It edges out the both-log
-variant on error metrics and is easier to interpret, since detections per overpass
-stay on their original scale.
+variant on error metrics and is easier to interpret, since detections per
+overpass stay on their original scale.
+
+## What this recovers
+
+```{r gain}
+n_ais <- nrow(panel_a)
+n_new <- nrow(panel_c)
+
+data.frame(
+  Measure = c("Cells used to train the model",
+              "Cells with AIS-based effort",
+              "Cells gained from radar predictions",
+              "Increase over AIS coverage (%)"),
+  Value = c(n_train, n_ais, n_new, round(100 * n_new / n_ais, 1))
+) %>%
+  kable(format = "html", format.args = list(big.mark = " "),
+        caption = "Coverage gained, 0.1 degree cells")
+```
+
+The percentage is expressed against AIS coverage rather than against all ocean
+cells, since cells outside the SAR footprint were never candidates for
+prediction.
 
 ## The figure
 
@@ -269,5 +327,8 @@ ggsave(here::here("R", "Outputs", "fishing_effort_panels.png"),
 ::: {.callout-note}
 Data from Global Fishing Watch: AIS fishing effort (Kroodsma et al. 2018,
 *Science*) and Sentinel-1 vessel detections (Paolo et al. 2024, *Nature*).
-Figure supports a manuscript in preparation.
+
+This layer supports Mouton et al., *Global gaps and priorities for shark and ray
+conservation: integrating threat, function, and evolutionary distinctiveness*,
+preprint at [doi.org/10.1101/2025.11.28.691085](https://doi.org/10.1101/2025.11.28.691085).
 :::
