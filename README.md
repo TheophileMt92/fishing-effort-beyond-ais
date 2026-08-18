@@ -7,7 +7,7 @@ AIS with Sentinel-1 satellite radar using a random forest.
 
 ## What this does
 
-Public monitoring of industrial fishing leans heavily on AIS, the transponder
+Public monitoring of industrial fishing leans heavily on AIS, the transceiver
 system vessels use to broadcast their position. Coverage is uneven: not every
 vessel carries it, not every vessel keeps it switched on, and satellite reception
 varies by region. Sentinel-1 radar sees vessels regardless of what they broadcast,
